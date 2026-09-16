@@ -575,6 +575,17 @@
     .btn-row.level1{ padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
   }
 
+  /* ===== Precio ECI dinámico (fuente: apple.daycanet.com) ===== */
+  .eci-price-th { white-space: nowrap; }
+  .eci-price-td { white-space: nowrap; }
+  .eci-price-link { display: inline-flex; align-items: baseline; gap: 5px; color: inherit; text-decoration: none; }
+  .eci-price-link:hover .eci-price-value { text-decoration: underline; }
+  .eci-price-value { font-weight: 700; color: var(--accent); }
+  .eci-price-orig { font-size: 0.85em; color: var(--text-dim); text-decoration: line-through; margin-left: 4px; }
+  .eci-price-unavail { font-size: 0.8em; color: var(--text-dim); margin-left: 4px; }
+  .eci-price-none { color: var(--text-dim); }
+  .home-updated#eciPriceUpdated:empty { display: none; }
+
   /* ===== Modal y estilo para EAN interactivo con código de barras ===== */
   .ean-clickable {
     cursor: pointer;
@@ -716,6 +727,7 @@
           <div class="home-stats">
             <span><strong>1875</strong> referencias</span>
             <span class="home-updated">Última actualización: <strong>10/09/2026</strong></span>
+            <span class="home-updated" id="eciPriceUpdated"></span>
           </div>
         </div>
       </section>
@@ -16496,6 +16508,106 @@
   }
 
   setupEanClickables();
+})();
+</script>
+
+<script>
+// ===== Precios ECI en vivo (fuente: scraper diario en apple.daycanet.com) =====
+// No modifica el catálogo de referencias — añade una columna "Precio ECI" a cada
+// tabla, casando por EAN (el mismo EAN embebido en la URL de producto de ECI,
+// sin el cero inicial).
+(function () {
+  var ECI_PRICE_API = 'https://apple.daycanet.com/api/eci.json';
+
+  function euros(n) {
+    if (typeof n !== 'number') return '';
+    return n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  }
+
+  function eanFromEciUrl(url) {
+    var m = /-([0-9]{13})-pr-/.exec(url || '');
+    return m ? m[1].replace(/^0/, '') : null;
+  }
+
+  function buildPriceMap(data) {
+    var map = {};
+    var cats = (data && data.categories) || {};
+    Object.keys(cats).forEach(function (cat) {
+      (cats[cat] || []).forEach(function (p) {
+        var ean = eanFromEciUrl(p.url);
+        if (ean) map[ean] = p;
+      });
+    });
+    return map;
+  }
+
+  function priceCellHtml(info) {
+    if (!info) return '<span class="eci-price-none">—</span>';
+    var html = '<span class="eci-price-value">' + euros(info.precio) + '</span>';
+    if (info.precioTachado) html += '<span class="eci-price-orig">' + euros(info.precioTachado) + '</span>';
+    if (info.disponible === false) html += '<span class="eci-price-unavail">agotado</span>';
+    if (info.url) {
+      return '<a class="eci-price-link" href="' + info.url + '" target="_blank" rel="noopener noreferrer">' + html + ' ↗</a>';
+    }
+    return html;
+  }
+
+  function applyPrices(priceMap) {
+    document.querySelectorAll('.panel:not(#search-results) table').forEach(function (table) {
+      var headRow = table.querySelector('thead tr');
+      var body = table.querySelector('tbody');
+      if (!headRow || !body) return;
+
+      var ths = Array.prototype.slice.call(headRow.children);
+      var eanIdx = -1;
+      ths.forEach(function (th, i) {
+        if (th.textContent.trim().toUpperCase() === 'EAN') eanIdx = i;
+      });
+      if (eanIdx === -1) return;
+
+      if (!headRow.querySelector('.eci-price-th')) {
+        var th = document.createElement('th');
+        th.className = 'eci-price-th';
+        th.textContent = 'Precio ECI';
+        headRow.appendChild(th);
+      }
+
+      body.querySelectorAll('tr').forEach(function (tr) {
+        if (tr.querySelector('.eci-price-td')) return; // ya aplicado
+        var cells = tr.children;
+        var eanCell = cells[eanIdx];
+        if (!eanCell) return;
+        var eanText = (eanCell.querySelector('.cell-text') || eanCell).textContent.trim();
+        var td = document.createElement('td');
+        td.className = 'eci-price-td';
+        td.style.background = eanCell.style.background || '';
+        td.style.color = eanCell.style.color || '';
+        td.innerHTML = priceCellHtml(priceMap[eanText]);
+        tr.appendChild(td);
+      });
+    });
+  }
+
+  function showUpdatedLabel(data) {
+    var el = document.getElementById('eciPriceUpdated');
+    if (!el || !data || !data.date) return;
+    var d = new Date(data.date);
+    if (isNaN(d)) return;
+    var dateStr = d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    var timeStr = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    el.innerHTML = 'Precios ECI actualizados: <strong>' + dateStr + ' ' + timeStr + '</strong>';
+  }
+
+  fetch(ECI_PRICE_API, { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      var priceMap = buildPriceMap(data);
+      applyPrices(priceMap);
+      showUpdatedLabel(data);
+    })
+    .catch(function (err) {
+      console.error('No se pudieron cargar los precios de ECI', err);
+    });
 })();
 </script>
 </body>
