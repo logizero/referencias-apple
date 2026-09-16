@@ -16524,9 +16524,15 @@
     return n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
   }
 
+  // El EAN de 13 dígitos va embebido en la URL de producto de ECI. El catálogo de
+  // referencias no es consistente sobre si guarda el cero inicial o no según la
+  // fila, así que quitamos TODOS los ceros iniciales en ambos lados al comparar.
+  function normalizeEan(s) {
+    return String(s || '').replace(/^0+/, '');
+  }
   function eanFromEciUrl(url) {
     var m = /-([0-9]{13})-pr-/.exec(url || '');
-    return m ? m[1].replace(/^0/, '') : null;
+    return m ? normalizeEan(m[1]) : null;
   }
 
   function buildPriceMap(data) {
@@ -16576,7 +16582,7 @@
         var cells = tr.children;
         var eanCell = cells[eanIdx];
         if (!eanCell) return;
-        var eanText = (eanCell.querySelector('.cell-text') || eanCell).textContent.trim();
+        var eanText = normalizeEan((eanCell.querySelector('.cell-text') || eanCell).textContent.trim());
         var td = tr.querySelector('.eci-price-td'); // reutiliza la celda si ya existe (snapshot -> en vivo)
         var isNew = !td;
         if (isNew) td = document.createElement('td');
