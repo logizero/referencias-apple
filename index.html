@@ -585,6 +585,9 @@
   .eci-price-unavail { font-size: 0.8em; color: var(--text-dim); margin-left: 4px; }
   .eci-price-none { color: var(--text-dim); }
   .home-updated#eciPriceUpdated:empty { display: none; }
+  .eci-source-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 0.78em; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+  .eci-source-live { background: rgba(62, 162, 90, 0.15); color: var(--accessory-border); }
+  .eci-source-snapshot { background: rgba(154, 161, 181, 0.15); color: var(--text-dim); }
 
   /* ===== Modal y estilo para EAN interactivo con código de barras ===== */
   .ean-clickable {
@@ -16595,14 +16598,17 @@
     });
   }
 
-  function showUpdatedLabel(data) {
+  function showUpdatedLabel(data, source) {
     var el = document.getElementById('eciPriceUpdated');
     if (!el || !data || !data.date) return;
     var d = new Date(data.date);
     if (isNaN(d)) return;
     var dateStr = d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
     var timeStr = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-    el.innerHTML = 'Precios ECI actualizados: <strong>' + dateStr + ' ' + timeStr + '</strong>';
+    var badge = source === 'live'
+      ? '<span class="eci-source-badge eci-source-live" title="Precios cargados en directo desde apple.daycanet.com">🟢 LIVE</span>'
+      : '<span class="eci-source-badge eci-source-snapshot" title="Precios del snapshot horneado en el repo — la carga en directo no respondió">🟡 snapshot</span>';
+    el.innerHTML = 'Precios ECI actualizados: <strong>' + dateStr + ' ' + timeStr + '</strong> ' + badge;
   }
 
   // Snapshot horneado en el propio repo (actualizado a diario por una tarea programada,
@@ -16612,7 +16618,7 @@
 
   if (ECI_PRICE_SNAPSHOT) {
     applyPrices(buildPriceMap(ECI_PRICE_SNAPSHOT));
-    showUpdatedLabel(ECI_PRICE_SNAPSHOT);
+    showUpdatedLabel(ECI_PRICE_SNAPSHOT, 'snapshot');
   }
 
   // Intento de carga en vivo por encima del snapshot — si funciona, sustituye los
@@ -16622,7 +16628,7 @@
     .then(function (data) {
       var priceMap = buildPriceMap(data);
       applyPrices(priceMap);
-      showUpdatedLabel(data);
+      showUpdatedLabel(data, 'live');
     })
     .catch(function (err) {
       console.error('No se pudieron cargar los precios de ECI en vivo, usando snapshot', err);
